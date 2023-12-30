@@ -1,0 +1,93 @@
+version: "2.2"
+
+services:
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.1
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - cartcurt
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.1
+    hostname: kafka-1
+    ports:
+      - "19092:19092"
+    depends_on:
+      - zookeeper
+    restart: on-failure
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1:9092,PLAINTEXT_INTERNAL://localhost:19092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - cartcurt
+
+  kafka-topics:
+    image: confluentinc/cp-kafka:7.4.1
+    container_name: kafka-topics
+    depends_on:
+      - "kafka-1"
+    command: "bash -c 'echo creating topics && \
+      kafka-topics --bootstrap-server kafka-1:9092 --create --topic wish_topic && \
+      kafka-topics --bootstrap-server kafka-1:9092 --create --topic wish_analysis_topic'"
+    networks:
+      - cartcurt
+
+  wishes-api:
+    build: wishes-api
+    container_name: wishes-api
+    restart: on-failure
+    ports:
+      - "8080:8080"
+    networks:
+      - cartcurt
+
+  es-writer:
+    build: es-writer
+    container_name: es-writer
+    restart: on-failure
+    depends_on:
+      - kafka-1
+      - kafka-topics
+      - es01
+    networks:
+      - cartcurt
+
+  kafka-streams:
+    build: kafka-streams
+    container_name: kafka-streams
+    depends_on:
+      - kafka-topics
+      - kafka-1
+    networks:
+      - cartcurt
+
+  es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.6.2
+    container_name: es01
+    environment:
+      - node.name=es01
+      - cluster.name=es-docker-cluster
+      - cluster.initial_master_nodes=es01
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - bootstrap.system_call_filter=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+    networks:
+      - cartcurt
+
+networks:
+  cartcurt:

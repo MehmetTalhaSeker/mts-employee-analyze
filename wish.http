@@ -1,0 +1,13 @@
+### Create wish
+POST localhost:8080
+Content-Type: application/json
+
+{
+  "employee_id": "1",
+  "keywords": "vending-machine"
+}
+
+### Get wishes
+GET localhost:9200/systemindex/_search
+Content-Type: application/json
+
